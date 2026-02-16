@@ -1,8 +1,7 @@
-.git
-.env*
+.github/
 test/
+.git/
+.gitignore
 node_modules/
-*.log
-.DS_Store
-.vscode/
-.idea/
+.env*
+*.test.js
