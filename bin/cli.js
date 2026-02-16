@@ -36,6 +36,8 @@ program
   .option('--brief', 'Brief output (one-line summary)')
   .option('--fix <platform>', `Generate fix config for platform (${PLATFORMS.join(', ')})`)
   .option('--timeout <seconds>', 'Connection timeout', '10')
+  .option('--ci', 'CI/CD mode: exit 1 if score below threshold')
+  .option('--min-score <score>', 'Minimum score for CI mode (default: 70)', '70')
   .action(async (url, options) => {
     // Show help if no URL provided
     if (!url) {
@@ -103,11 +105,21 @@ program
         console.log(formatReport(results, options));
       }
       
-      // Exit code based on grade (for CI/CD)
-      const gradeToExitCode = {
-        'A+': 0, 'A': 0, 'B': 0, 'C': 0, 'D': 1, 'F': 1
-      };
-      process.exit(gradeToExitCode[results.grade] || 1);
+      // Exit code logic:
+      // - Exit 0: scan completed successfully (default)
+      // - Exit 1: only in --ci mode if score below threshold
+      if (options.ci) {
+        const minScore = parseInt(options.minScore);
+        const percentage = Math.round((results.score / results.maxScore) * 100);
+        if (percentage < minScore) {
+          if (!options.json && !options.brief) {
+            console.error(chalk.yellow(`\n⚠️  CI mode: Score ${percentage}/100 below minimum ${minScore}`));
+          }
+          process.exit(1);
+        }
+      }
+      
+      process.exit(0);
       
     } catch (err) {
       if (options.json) {

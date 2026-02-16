@@ -176,7 +176,7 @@ function fetchHeaders(parsedUrl, options = {}) {
       method: 'HEAD',
       timeout,
       headers: {
-        'User-Agent': 'SiteGuard/0.1 Security Scanner (https://github.com/persio10/siteguard)'
+        'User-Agent': 'mpx-scan/1.0.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)'
       },
       rejectUnauthorized: false // We check SSL separately
     }, (res) => {
