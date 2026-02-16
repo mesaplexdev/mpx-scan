@@ -13,6 +13,7 @@ const { scan } = require('../src/index');
 const { formatReport, formatBrief } = require('../src/reporters/terminal');
 const { formatJSON } = require('../src/reporters/json');
 const { generateFixes, PLATFORMS } = require('../src/generators/fixes');
+const { getSchema } = require('../src/schema');
 const { 
   getLicense, 
   activateLicense, 
@@ -24,6 +25,18 @@ const {
 
 const pkg = require('../package.json');
 
+// Exit codes per AI-native spec
+const EXIT = {
+  SUCCESS: 0,           // Success, no issues found
+  ISSUES_FOUND: 1,      // Success, issues found
+  BAD_ARGS: 2,          // Invalid arguments
+  CONFIG_ERROR: 3,      // Configuration error
+  NETWORK_ERROR: 4      // Network/connectivity error
+};
+
+// Auto-detect non-interactive mode
+const isInteractive = process.stdout.isTTY && !process.env.CI;
+
 const program = new Command();
 
 program
@@ -32,105 +45,252 @@ program
   .version(pkg.version)
   .argument('[url]', 'URL to scan')
   .option('--full', 'Run all checks (Pro only)')
-  .option('--json', 'Output as JSON')
+  .option('--json', 'Output as JSON (machine-readable)')
   .option('--brief', 'Brief output (one-line summary)')
+  .option('--quiet, -q', 'Minimal output (results only, no banners)')
+  .option('--no-color', 'Disable colored output')
+  .option('--batch', 'Batch mode: read URLs from stdin (one per line)')
+  .option('--schema', 'Output JSON schema describing all commands and flags')
   .option('--fix <platform>', `Generate fix config for platform (${PLATFORMS.join(', ')})`)
   .option('--timeout <seconds>', 'Connection timeout', '10')
   .option('--ci', 'CI/CD mode: exit 1 if score below threshold')
   .option('--min-score <score>', 'Minimum score for CI mode (default: 70)', '70')
   .action(async (url, options) => {
+    // Handle --schema flag
+    if (options.schema) {
+      console.log(JSON.stringify(getSchema(), null, 2));
+      process.exit(EXIT.SUCCESS);
+      return;
+    }
+
+    // Handle --batch mode (read URLs from stdin)
+    if (options.batch) {
+      await runBatchMode(options);
+      return;
+    }
+
     // Show help if no URL provided
     if (!url) {
       program.help();
       return;
     }
     
-    try {
-      // Check license and rate limits
-      const license = getLicense();
-      const rateLimit = checkRateLimit();
-      
-      // Handle rate limiting
-      if (!rateLimit.allowed) {
+    const exitCode = await runSingleScan(url, options);
+    process.exit(exitCode);
+  });
+
+async function runSingleScan(url, options) {
+  const jsonMode = options.json;
+  const quietMode = options.quiet || options.Q;
+  
+  // Disable chalk if --no-color or non-TTY
+  if (options.color === false || !process.stdout.isTTY) {
+    chalk.level = 0;
+  }
+
+  try {
+    // Check license and rate limits
+    const license = getLicense();
+    const rateLimit = checkRateLimit();
+    
+    // Handle rate limiting
+    if (!rateLimit.allowed) {
+      if (jsonMode) {
+        console.log(JSON.stringify({
+          error: 'Daily scan limit reached',
+          code: 'ERR_RATE_LIMIT',
+          resetsAt: new Date(rateLimit.resetsAt).toISOString(),
+          limit: FREE_DAILY_LIMIT,
+          upgrade: 'https://mesaplex.com/mpx-scan'
+        }, null, 2));
+      } else {
         console.error(chalk.red.bold('\n❌ Daily scan limit reached'));
         console.error(chalk.yellow(`Free tier: ${FREE_DAILY_LIMIT} scans/day`));
         console.error(chalk.gray(`Resets: ${new Date(rateLimit.resetsAt).toLocaleString()}\n`));
         console.error(chalk.blue('Upgrade to Pro for unlimited scans:'));
         console.error(chalk.blue('  https://mesaplex.com/mpx-scan\n'));
-        process.exit(1);
       }
-      
-      // Check for Pro-only features
-      if (options.full && license.tier !== 'pro') {
+      return EXIT.CONFIG_ERROR;
+    }
+    
+    // Check for Pro-only features
+    if (options.full && license.tier !== 'pro') {
+      if (jsonMode) {
+        console.log(JSON.stringify({
+          error: '--full flag requires Pro license',
+          code: 'ERR_PRO_REQUIRED',
+          upgrade: 'https://mesaplex.com/mpx-scan'
+        }, null, 2));
+      } else {
         console.error(chalk.red.bold('\n❌ --full flag requires Pro license'));
         console.error(chalk.yellow('Free tier includes: headers, SSL, server checks'));
         console.error(chalk.yellow('Pro includes: all checks (DNS, cookies, SRI, exposed files, etc.)\n'));
         console.error(chalk.blue('Upgrade: https://mesaplex.com/mpx-scan\n'));
-        process.exit(1);
       }
-      
-      if (options.json && license.tier !== 'pro') {
-        console.error(chalk.red.bold('\n❌ --json output requires Pro license\n'));
-        console.error(chalk.blue('Upgrade: https://mesaplex.com/mpx-scan\n'));
-        process.exit(1);
+      return EXIT.CONFIG_ERROR;
+    }
+    
+    // Show scan info (unless quiet/json/brief)
+    if (!jsonMode && !options.brief && !quietMode) {
+      console.error(chalk.bold.cyan('🔍 Scanning...'));
+      if (license.tier === 'free') {
+        console.error(chalk.gray(`Free tier: ${rateLimit.remaining} scan(s) remaining today`));
       }
-      
-      // Show scan info
-      if (!options.json && !options.brief) {
-        console.log('');
-        console.log(chalk.bold.cyan('🔍 Scanning...'));
-        if (license.tier === 'free') {
-          console.log(chalk.gray(`Free tier: ${rateLimit.remaining} scan(s) remaining today\n`));
+    }
+    
+    // Run scan
+    const results = await scan(url, {
+      timeout: parseInt(options.timeout) * 1000,
+      tier: license.tier,
+      full: options.full
+    });
+    
+    // Record scan for rate limiting
+    recordScan();
+    
+    // Output results
+    if (options.fix) {
+      console.log(generateFixes(options.fix, results));
+    } else if (jsonMode) {
+      console.log(formatJSON(results, true));
+    } else if (options.brief) {
+      console.log(formatBrief(results));
+    } else {
+      console.log(formatReport(results, { ...options, quiet: quietMode }));
+    }
+    
+    // Determine exit code based on findings
+    if (options.ci) {
+      const minScore = parseInt(options.minScore);
+      const percentage = Math.round((results.score / results.maxScore) * 100);
+      if (percentage < minScore) {
+        if (!jsonMode && !options.brief && !quietMode) {
+          console.error(chalk.yellow(`\n⚠️  CI mode: Score ${percentage}/100 below minimum ${minScore}`));
         }
+        return EXIT.ISSUES_FOUND;
       }
+    }
+    
+    // Exit 1 if there are failures, 0 if clean
+    if (results.summary.failed > 0) {
+      return EXIT.ISSUES_FOUND;
+    }
+    return EXIT.SUCCESS;
+    
+  } catch (err) {
+    if (jsonMode) {
+      const code = isNetworkError(err) ? 'ERR_NETWORK' : 'ERR_SCAN';
+      console.log(JSON.stringify({ error: err.message, code }, null, 2));
+    } else {
+      console.error(chalk.red.bold('\n❌ Error:'), err.message);
+      console.error('');
+    }
+    return isNetworkError(err) ? EXIT.NETWORK_ERROR : EXIT.ISSUES_FOUND;
+  }
+}
+
+async function runBatchMode(options) {
+  const jsonMode = options.json;
+
+  // Read URLs from stdin
+  const input = await readStdin();
+  if (!input.trim()) {
+    if (jsonMode) {
+      console.log(JSON.stringify({ error: 'No URLs provided on stdin', code: 'ERR_NO_INPUT' }, null, 2));
+    } else {
+      console.error(chalk.red('No URLs provided. Pipe URLs via stdin:'));
+      console.error(chalk.gray('  cat urls.txt | mpx-scan --batch --json'));
+    }
+    process.exit(EXIT.BAD_ARGS);
+    return;
+  }
+
+  const urls = input.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  
+  if (urls.length === 0) {
+    if (jsonMode) {
+      console.log(JSON.stringify({ error: 'No valid URLs found in input', code: 'ERR_NO_INPUT' }, null, 2));
+    } else {
+      console.error(chalk.red('No valid URLs found in input.'));
+    }
+    process.exit(EXIT.BAD_ARGS);
+    return;
+  }
+
+  let hasIssues = false;
+  let hasErrors = false;
+
+  for (const url of urls) {
+    try {
+      const license = getLicense();
+      const rateLimit = checkRateLimit();
       
-      // Run scan
+      if (!rateLimit.allowed) {
+        if (jsonMode) {
+          console.log(JSON.stringify({
+            url,
+            error: 'Rate limit reached',
+            code: 'ERR_RATE_LIMIT'
+          }));
+        }
+        hasErrors = true;
+        continue;
+      }
+
       const results = await scan(url, {
         timeout: parseInt(options.timeout) * 1000,
         tier: license.tier,
         full: options.full
       });
       
-      // Record scan for rate limiting
       recordScan();
       
-      // Output results
-      if (options.fix) {
-        console.log(generateFixes(options.fix, results));
-      } else if (options.json) {
-        console.log(formatJSON(results, true));
+      if (results.summary.failed > 0) hasIssues = true;
+
+      if (jsonMode) {
+        // JSONL: one JSON object per line
+        console.log(formatJSON(results, false));
       } else if (options.brief) {
         console.log(formatBrief(results));
       } else {
         console.log(formatReport(results, options));
       }
-      
-      // Exit code logic:
-      // - Exit 0: scan completed successfully (default)
-      // - Exit 1: only in --ci mode if score below threshold
-      if (options.ci) {
-        const minScore = parseInt(options.minScore);
-        const percentage = Math.round((results.score / results.maxScore) * 100);
-        if (percentage < minScore) {
-          if (!options.json && !options.brief) {
-            console.error(chalk.yellow(`\n⚠️  CI mode: Score ${percentage}/100 below minimum ${minScore}`));
-          }
-          process.exit(1);
-        }
-      }
-      
-      process.exit(0);
-      
     } catch (err) {
-      if (options.json) {
-        console.log(JSON.stringify({ error: err.message }, null, 2));
+      hasErrors = true;
+      if (jsonMode) {
+        console.log(JSON.stringify({ url, error: err.message, code: isNetworkError(err) ? 'ERR_NETWORK' : 'ERR_SCAN' }));
       } else {
-        console.error(chalk.red.bold('\n❌ Error:'), err.message);
-        console.error('');
+        console.error(chalk.red(`Error scanning ${url}: ${err.message}`));
       }
-      process.exit(1);
     }
+  }
+
+  if (hasErrors) process.exit(EXIT.NETWORK_ERROR);
+  if (hasIssues) process.exit(EXIT.ISSUES_FOUND);
+  process.exit(EXIT.SUCCESS);
+}
+
+function readStdin() {
+  return new Promise((resolve) => {
+    if (process.stdin.isTTY) {
+      resolve('');
+      return;
+    }
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('end', () => resolve(data));
   });
+}
+
+function isNetworkError(err) {
+  const msg = (err.message || '').toLowerCase();
+  return msg.includes('econnrefused') || msg.includes('enotfound') || 
+         msg.includes('timeout') || msg.includes('network') ||
+         msg.includes('dns') || msg.includes('econnreset') ||
+         err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || 
+         err.code === 'ETIMEDOUT';
+}
 
 // License management subcommands
 program
@@ -187,7 +347,7 @@ program
     } catch (err) {
       console.error(chalk.red.bold('\n❌ Activation failed:'), err.message);
       console.error('');
-      process.exit(1);
+      process.exit(EXIT.CONFIG_ERROR);
     }
   });
 
@@ -202,20 +362,43 @@ program
     console.log('');
   });
 
+// MCP subcommand
+program
+  .command('mcp')
+  .description('Start MCP (Model Context Protocol) stdio server')
+  .action(async () => {
+    try {
+      const { startMCPServer } = require('../src/mcp');
+      await startMCPServer();
+    } catch (err) {
+      console.error(JSON.stringify({ error: err.message, code: 'ERR_MCP_START' }));
+      process.exit(EXIT.CONFIG_ERROR);
+    }
+  });
+
 // Examples
 program.addHelpText('after', `
 ${chalk.bold('Examples:')}
   ${chalk.cyan('mpx-scan https://example.com')}           Quick security scan
   ${chalk.cyan('mpx-scan example.com --full')}            Deep scan (Pro only)
-  ${chalk.cyan('mpx-scan example.com --json')}            JSON output (Pro only)
+  ${chalk.cyan('mpx-scan example.com --json')}            JSON output
   ${chalk.cyan('mpx-scan example.com --fix nginx')}       Generate nginx config
   ${chalk.cyan('mpx-scan example.com --brief')}           One-line summary
+  ${chalk.cyan('mpx-scan --schema')}                      Show tool schema (JSON)
+  ${chalk.cyan('cat urls.txt | mpx-scan --batch --json')} Batch scan from stdin
+  ${chalk.cyan('mpx-scan mcp')}                           Start MCP server
   ${chalk.cyan('mpx-scan license')}                       Check license status
-  ${chalk.cyan('mpx-scan activate MPX-PRO-XXX')}          Activate Pro license
+
+${chalk.bold('Exit Codes:')}
+  0  Success, no issues found
+  1  Success, issues found
+  2  Invalid arguments
+  3  Configuration error (license, rate limit)
+  4  Network/connectivity error
 
 ${chalk.bold('Free vs Pro:')}
   ${chalk.yellow('Free:')}  3 scans/day, basic checks (headers, SSL, server)
-  ${chalk.green('Pro:')}   Unlimited scans, all checks, JSON export, CI/CD integration
+  ${chalk.green('Pro:')}   Unlimited scans, all checks, batch mode, CI/CD integration
 
   ${chalk.blue('Upgrade: https://mesaplex.com/mpx-scan')}
 `);
