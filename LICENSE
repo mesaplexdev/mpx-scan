@@ -1,0 +1,32 @@
+Mesaplex Dual License
+
+Copyright (c) 2026 Mesaplex
+
+This software is available under two licensing options:
+
+1. FREE TIER (Personal Use)
+   - 3 scans per day
+   - Basic security checks (headers, SSL, server)
+   - Personal and non-commercial use only
+   - No JSON export or advanced features
+   
+   Permission is granted to use this software for personal, non-commercial
+   purposes subject to the daily scan limit.
+
+2. PRO LICENSE (Commercial Use)
+   - Unlimited scans
+   - All security checks (DNS, cookies, SRI, exposed files, etc.)
+   - JSON/CSV export
+   - CI/CD integration
+   - Commercial use allowed
+   - Priority support
+   
+   To obtain a Pro license, visit: https://mesaplex.com/mpx-scan
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
