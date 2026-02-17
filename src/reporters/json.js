@@ -4,10 +4,12 @@
  * Machine-readable output for CI/CD pipelines
  */
 
+const pkg = require('../../package.json');
+
 function formatJSON(results, pretty = false) {
   const output = {
     mpxScan: {
-      version: '1.0.0',
+      version: pkg.version,
       scannedAt: results.scannedAt,
       scanDuration: results.scanDuration
     },
