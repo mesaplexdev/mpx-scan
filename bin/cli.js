@@ -54,7 +54,7 @@ program
   .option('--fix <platform>', `Generate fix config for platform (${PLATFORMS.join(', ')})`)
   .option('--timeout <seconds>', 'Connection timeout', '10')
   .option('--ci', 'CI/CD mode: exit 1 if score below threshold')
-  .option('--min-score <score>', 'Minimum score for CI mode (default: 70)', '70')
+  .option('--min-score <score>', 'Minimum score for CI mode', '70')
   .action(async (url, options) => {
     // Handle --schema flag
     if (options.schema) {
@@ -89,6 +89,20 @@ async function runSingleScan(url, options) {
   }
 
   try {
+    // BUG-03: Validate --fix platform BEFORE scanning (exits 2 for invalid platforms)
+    if (options.fix) {
+      if (!PLATFORMS.includes(options.fix)) {
+        if (jsonMode) {
+          console.log(JSON.stringify({ error: `Invalid platform: "${options.fix}". Valid platforms: ${PLATFORMS.join(', ')}`, code: 'ERR_BAD_ARGS' }, null, 2));
+        } else {
+          console.error(chalk.red.bold(`\n❌ Invalid platform: "${options.fix}"`));
+          console.error(chalk.yellow(`Valid platforms: ${PLATFORMS.join(', ')}`));
+          console.error('');
+        }
+        return EXIT.BAD_ARGS;
+      }
+    }
+
     // Validate timeout
     const timeoutVal = parseInt(options.timeout);
     if (isNaN(timeoutVal) || timeoutVal < 0) {

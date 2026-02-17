@@ -38,7 +38,7 @@ async function scanRedirects(parsedUrl, options = {}) {
       
       const result = await followRedirect(testUrl, options);
       
-      if (result.redirectsToExternal) {
+      if (result.redirectsToExternal && !result.isSameDomain) {
         vulnParams.push({ param, redirectedTo: result.location });
         return { param, vulnerable: true };
       } else {
@@ -96,11 +96,13 @@ function followRedirect(testUrl, options = {}) {
         const location = res.headers.location;
         try {
           const redirectTarget = new URL(location, testUrl.href);
-          // Check if redirect goes to our test domain OR any external domain
-          // that wasn't the original host (indicates the param controls redirect target)
           const originalHost = testUrl.hostname;
+          // Only flag if redirect target is exactly the evil test domain
           const isExternal = redirectTarget.hostname === 'evil.example.com';
-          done({ redirectsToExternal: isExternal, location });
+          // Skip flagging apex→www redirects (same root domain)
+          const getRootDomain = h => h.split('.').slice(-2).join('.');
+          const isSameDomain = getRootDomain(redirectTarget.hostname) === getRootDomain(originalHost);
+          done({ redirectsToExternal: isExternal, isSameDomain, location });
         } catch {
           done({ redirectsToExternal: false });
         }
