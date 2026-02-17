@@ -7,6 +7,8 @@
  * Zero external dependencies for scanning (only chalk/commander for CLI)
  */
 
+const https = require('https');
+const http = require('http');
 const { scanHeaders } = require('./scanners/headers');
 const { scanSSL } = require('./scanners/ssl');
 const { scanCookies } = require('./scanners/cookies');
@@ -30,8 +32,58 @@ const SCANNER_TIERS = {
  * @param {object} options - Scan options
  * @returns {object} Structured scan report
  */
+/**
+ * Quick connectivity check — throws a network error if the host is unreachable.
+ * Used to provide exit code 4 (NETWORK_ERROR) early instead of silently returning error checks.
+ */
+function checkConnectivity(parsedUrl, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const protocol = parsedUrl.protocol === 'https:' ? https : http;
+    const timer = setTimeout(() => {
+      req && req.destroy();
+      const err = new Error(`ETIMEDOUT: Connection to ${parsedUrl.hostname} timed out`);
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    }, timeoutMs);
+
+    const req = protocol.request({
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+      path: parsedUrl.pathname || '/',
+      method: 'HEAD',
+      timeout: timeoutMs,
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner' },
+      rejectUnauthorized: false,
+    }, (res) => {
+      clearTimeout(timer);
+      res.resume();
+      resolve();
+    });
+
+    req.on('error', (err) => {
+      clearTimeout(timer);
+      if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+        reject(err);
+      } else {
+        resolve(); // Other errors (like SSL) are fine — host is reachable
+      }
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      clearTimeout(timer);
+      const err = new Error(`ETIMEDOUT: Connection to ${parsedUrl.hostname} timed out`);
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    });
+
+    req.end();
+  });
+}
+
 async function scan(url, options = {}) {
   const startTime = Date.now();
+  const timeoutMs = options.timeout || 10000;
   
   // Normalize URL
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -39,6 +91,9 @@ async function scan(url, options = {}) {
   }
   
   const parsedUrl = new URL(url);
+  
+  // BUG-02: Pre-scan connectivity check — throws network error → CLI maps to exit 4
+  await checkConnectivity(parsedUrl, Math.min(timeoutMs, 10000));
   const results = {
     url: parsedUrl.href,
     hostname: parsedUrl.hostname,
@@ -75,10 +130,21 @@ async function scan(url, options = {}) {
   
   const enabledScanners = allScanners.filter(s => allowedScanners.includes(s.name));
 
+  // BUG-05: Wrap each scanner in a timeout race to prevent hanging on closed ports
+  const scannerTimeout = timeoutMs + 5000; // Give scanners a bit extra beyond the connect timeout
+
   // Run scanners concurrently
   const scanPromises = enabledScanners.map(async (scanner) => {
     try {
-      const result = await scanner.fn(parsedUrl, options);
+      // BUG-05: Race scanner against timeout to prevent indefinite hang on closed ports
+      const timeoutPromise = new Promise((_, reject) => {
+        const t = setTimeout(() => {
+          reject(new Error(`Scanner timed out after ${scannerTimeout}ms`));
+        }, scannerTimeout);
+        // Allow process to exit even if timer is pending
+        if (t.unref) t.unref();
+      });
+      const result = await Promise.race([scanner.fn(parsedUrl, options), timeoutPromise]);
       return { name: scanner.name, weight: scanner.weight, result };
     } catch (err) {
       return { 

@@ -13,6 +13,19 @@
 const dns = require('dns');
 const { Resolver } = dns.promises;
 
+/**
+ * BUG-12: Wrap a DNS promise in a race against a timeout to prevent indefinite hangs.
+ */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`DNS timeout for ${label}`)), ms);
+      if (t.unref) t.unref();
+    })
+  ]);
+}
+
 async function scanDNS(parsedUrl, options = {}) {
   const checks = [];
   let score = 0;
@@ -25,11 +38,13 @@ async function scanDNS(parsedUrl, options = {}) {
   
   const resolver = new Resolver();
   resolver.setServers(['8.8.8.8', '1.1.1.1']); // Use public DNS
+  
+  const dnsTimeout = options.timeout ? Math.min(options.timeout, 10000) : 10000;
 
   // --- SPF Record ---
   maxScore += 1;
   try {
-    const txtRecords = await resolver.resolveTxt(rootDomain);
+    const txtRecords = await withTimeout(resolver.resolveTxt(rootDomain), dnsTimeout, `TXT ${rootDomain}`);
     const spf = txtRecords.flat().find(r => r.startsWith('v=spf1'));
     if (spf) {
       const hasAll = /[-~?+]all/.test(spf);
@@ -54,7 +69,7 @@ async function scanDNS(parsedUrl, options = {}) {
   // --- DMARC Record ---
   maxScore += 1;
   try {
-    const dmarcRecords = await resolver.resolveTxt(`_dmarc.${rootDomain}`);
+    const dmarcRecords = await withTimeout(resolver.resolveTxt(`_dmarc.${rootDomain}`), dnsTimeout, `DMARC ${rootDomain}`);
     const dmarc = dmarcRecords.flat().find(r => r.startsWith('v=DMARC1'));
     if (dmarc) {
       const policy = (dmarc.match(/p=(\w+)/) || [])[1] || 'none';
@@ -82,7 +97,7 @@ async function scanDNS(parsedUrl, options = {}) {
   // --- CAA Records ---
   maxScore += 0.5;
   try {
-    const caaRecords = await resolver.resolveCaa(rootDomain);
+    const caaRecords = await withTimeout(resolver.resolveCaa(rootDomain), dnsTimeout, `CAA ${rootDomain}`);
     if (caaRecords && caaRecords.length > 0) {
       const issuers = caaRecords.filter(r => r.tag === 'issue').map(r => r.value);
       checks.push({ name: 'CAA Records', status: 'pass', message: `Restricts certificate issuance to: ${issuers.join(', ')}`, value: issuers.join(', ') });
@@ -100,7 +115,7 @@ async function scanDNS(parsedUrl, options = {}) {
 
   // --- MX Records (informational) ---
   try {
-    const mxRecords = await resolver.resolveMx(rootDomain);
+    const mxRecords = await withTimeout(resolver.resolveMx(rootDomain), dnsTimeout, `MX ${rootDomain}`);
     if (mxRecords && mxRecords.length > 0) {
       const mxList = mxRecords.sort((a, b) => a.priority - b.priority).map(r => `${r.exchange} (${r.priority})`);
       checks.push({ name: 'MX Records', status: 'info', message: `Mail servers: ${mxList.join(', ')}`, value: mxList.join(', ') });
