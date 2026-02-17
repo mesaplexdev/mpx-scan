@@ -1,6 +1,6 @@
 {
   "name": "mpx-scan",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Professional website security scanner CLI. Check headers, SSL, cookies, DNS, and get actionable fix suggestions. Part of the Mesaplex developer toolchain.",
   "main": "src/index.js",
   "bin": {

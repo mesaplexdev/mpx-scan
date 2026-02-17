@@ -58,7 +58,7 @@ async function scan(url, options = {}) {
   };
 
   const allScanners = [
-    { name: 'headers', fn: scanHeaders, weight: 25 },
+    { name: 'headers', fn: scanHeaders, weight: 15 },
     { name: 'ssl', fn: scanSSL, weight: 20 },
     { name: 'cookies', fn: scanCookies, weight: 10 },
     { name: 'server', fn: scanServer, weight: 8 },
