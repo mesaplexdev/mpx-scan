@@ -81,7 +81,7 @@ function followRedirect(testUrl, options = {}) {
     const protocol = testUrl.protocol === 'https:' ? https : http;
     let resolved = false;
     const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
-    const timer = setTimeout(() => done({ redirectsToExternal: false }), timeout + 1000);
+    const timer = setTimeout(() => { req && req.destroy(); done({ redirectsToExternal: false }); }, timeout);
 
     const req = protocol.request(testUrl.href, {
       method: 'GET',
@@ -99,9 +99,7 @@ function followRedirect(testUrl, options = {}) {
           // Check if redirect goes to our test domain OR any external domain
           // that wasn't the original host (indicates the param controls redirect target)
           const originalHost = testUrl.hostname;
-          const isExternal = redirectTarget.hostname !== originalHost && 
-                            (redirectTarget.hostname.includes('evil.example.com') ||
-                             redirectTarget.href.includes('evil.example.com'));
+          const isExternal = redirectTarget.hostname === 'evil.example.com';
           done({ redirectsToExternal: isExternal, location });
         } catch {
           done({ redirectsToExternal: false });
