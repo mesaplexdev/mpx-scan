@@ -34,6 +34,11 @@ const GRADE_COLORS = {
 function formatReport(results, options = {}) {
   const lines = [];
   
+  // Quiet mode: results only, no banners or decoration
+  if (options.quiet) {
+    return formatQuiet(results);
+  }
+  
   // Header
   lines.push('');
   lines.push(chalk.bold.cyan('┌─────────────────────────────────────────────────────────────┐'));
@@ -135,6 +140,27 @@ function capitalize(str) {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, s => s.toUpperCase())
     .trim();
+}
+
+function formatQuiet(results) {
+  const lines = [];
+  const gradeColor = GRADE_COLORS[results.grade] || 'gray';
+  const percentage = Math.round((results.score / results.maxScore) * 100);
+  
+  lines.push(chalk.bold[gradeColor](results.grade) + chalk.gray(` (${percentage}/100)`) + 
+             ` — ${chalk.green(results.summary.passed + ' passed')} ${chalk.yellow(results.summary.warnings + ' warnings')} ${chalk.red(results.summary.failed + ' failed')}`);
+  
+  for (const [name, section] of Object.entries(results.sections)) {
+    for (const check of section.checks) {
+      if (check.status === 'fail' || check.status === 'warn') {
+        const icon = STATUS_ICONS[check.status];
+        const color = STATUS_COLORS[check.status];
+        lines.push(chalk[color](`  ${icon} ${check.name}: ${check.message || ''}`));
+      }
+    }
+  }
+  
+  return lines.join('\n');
 }
 
 module.exports = { formatReport, formatBrief };
