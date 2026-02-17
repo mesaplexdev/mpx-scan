@@ -4,3 +4,9 @@ node_modules/
 .env
 .mpx-scan/
 test-output-*.txt
+
+# Internal build docs
+*_SUMMARY.md
+BUILD_*.md
+SPRINT_*.md
+*-sprint*.md
