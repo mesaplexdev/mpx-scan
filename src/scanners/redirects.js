@@ -86,7 +86,7 @@ function followRedirect(testUrl, options = {}) {
     const req = protocol.request(testUrl.href, {
       method: 'GET',
       timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
       res.resume(); // Consume body

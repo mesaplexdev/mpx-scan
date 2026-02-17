@@ -78,12 +78,24 @@ function fetchCookies(parsedUrl, options = {}) {
     const req = protocol.request(parsedUrl.href, {
       method: 'GET',
       timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
       // Consume body
       res.on('data', () => {});
       res.on('end', () => {});
+
+      // Follow redirects to get cookies from final destination
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if ((options._redirectCount || 0) >= 5) {
+          resolve([]);
+          return;
+        }
+        const redirectUrl = new URL(res.headers.location, parsedUrl.href);
+        fetchCookies(redirectUrl, { ...options, _redirectCount: (options._redirectCount || 0) + 1 })
+          .then(resolve).catch(() => resolve([]));
+        return;
+      }
 
       const setCookies = res.headers['set-cookie'] || [];
       const parsed = setCookies.map(parseCookie);
