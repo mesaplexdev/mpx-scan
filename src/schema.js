@@ -175,6 +175,19 @@ function getSchema() {
       deactivate: {
         description: 'Deactivate Pro license and return to free tier',
         usage: 'mpx-scan deactivate'
+      },
+      update: {
+        description: 'Check for updates and optionally install the latest version',
+        usage: 'mpx-scan update [--check] [--json]',
+        flags: {
+          '--check': { description: 'Only check for updates (do not install)', default: false },
+          '--json': { description: 'Machine-readable JSON output', default: false }
+        },
+        examples: [
+          { command: 'mpx-scan update', description: 'Check and install updates' },
+          { command: 'mpx-scan update --check', description: 'Just check for updates' },
+          { command: 'mpx-scan update --check --json', description: 'Check for updates (JSON output)' }
+        ]
       }
     },
     scanners: {

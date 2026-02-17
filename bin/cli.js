@@ -47,7 +47,7 @@ program
   .option('--full', 'Run all checks (Pro only)')
   .option('--json', 'Output as JSON (machine-readable)')
   .option('--brief', 'Brief output (one-line summary)')
-  .option('--quiet, -q', 'Minimal output (results only, no banners)')
+  .option('-q, --quiet', 'Minimal output (results only, no banners)')
   .option('--no-color', 'Disable colored output')
   .option('--batch', 'Batch mode: read URLs from stdin (one per line)')
   .option('--schema', 'Output JSON schema describing all commands and flags')
@@ -360,6 +360,79 @@ program
     console.log(chalk.yellow('License deactivated'));
     console.log(chalk.gray('You are now on the free tier (3 scans/day)'));
     console.log('');
+  });
+
+// Update subcommand
+program
+  .command('update')
+  .description('Check for updates and optionally install the latest version')
+  .option('--check', 'Only check for updates (do not install)')
+  .option('--json', 'Machine-readable JSON output')
+  .action(async (options, cmd) => {
+    const { checkForUpdate, performUpdate } = require('../src/update');
+    const jsonMode = options.json || cmd.parent?.opts()?.json;
+
+    try {
+      const info = checkForUpdate();
+
+      if (jsonMode) {
+        const output = {
+          current: info.current,
+          latest: info.latest,
+          updateAvailable: info.updateAvailable,
+          isGlobal: info.isGlobal
+        };
+
+        if (!options.check && info.updateAvailable) {
+          try {
+            const result = performUpdate(info.isGlobal);
+            output.updated = true;
+            output.newVersion = result.version;
+          } catch (err) {
+            output.updated = false;
+            output.error = err.message;
+          }
+        }
+
+        console.log(JSON.stringify(output, null, 2));
+        process.exit(EXIT.SUCCESS);
+        return;
+      }
+
+      // Human-readable output
+      if (!info.updateAvailable) {
+        console.log('');
+        console.log(chalk.green.bold(`✓ mpx-scan v${info.current} is up to date`));
+        console.log('');
+        process.exit(EXIT.SUCCESS);
+        return;
+      }
+
+      console.log('');
+      console.log(chalk.yellow.bold(`⬆ Update available: v${info.current} → v${info.latest}`));
+
+      if (options.check) {
+        console.log(chalk.gray(`Run ${chalk.cyan('mpx-scan update')} to install`));
+        console.log('');
+        process.exit(EXIT.SUCCESS);
+        return;
+      }
+
+      console.log(chalk.gray(`Installing v${info.latest}${info.isGlobal ? ' (global)' : ''}...`));
+
+      const result = performUpdate(info.isGlobal);
+      console.log(chalk.green.bold(`✓ Updated to v${result.version}`));
+      console.log('');
+      process.exit(EXIT.SUCCESS);
+    } catch (err) {
+      if (jsonMode) {
+        console.log(JSON.stringify({ error: err.message, code: 'ERR_UPDATE' }, null, 2));
+      } else {
+        console.error(chalk.red.bold('\n❌ Update check failed:'), err.message);
+        console.error('');
+      }
+      process.exit(EXIT.NETWORK_ERROR);
+    }
   });
 
 // MCP subcommand
