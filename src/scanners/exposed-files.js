@@ -151,7 +151,7 @@ function checkPath(parsedUrl, pathStr, options = {}) {
     const req = protocol.request(url.href, {
       method: 'GET',
       timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
       let body = '';

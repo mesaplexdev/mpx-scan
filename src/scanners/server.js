@@ -84,14 +84,18 @@ async function scanServer(parsedUrl, options = {}) {
 function checkRedirectToHttps(httpUrl, options = {}) {
   return new Promise((resolve, reject) => {
     const timeout = options.timeout || 5000;
+    const method = options._useGet ? 'GET' : 'HEAD';
     const req = http.request(httpUrl.href, {
-      method: 'HEAD',
+      method,
       timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
     }, (res) => {
+      if (method === 'GET') { res.resume(); }
       if (res.statusCode >= 300 && res.statusCode < 400) {
         const location = res.headers.location || '';
         resolve(location.startsWith('https://'));
+      } else if (!options._useGet && res.statusCode >= 400) {
+        checkRedirectToHttps(httpUrl, { ...options, _useGet: true }).then(resolve).catch(reject);
       } else {
         resolve(false);
       }
@@ -105,16 +109,23 @@ function checkRedirectToHttps(httpUrl, options = {}) {
 function fetchWithOrigin(parsedUrl, options = {}) {
   return new Promise((resolve, reject) => {
     const timeout = options.timeout || 5000;
+    const method = options._useGet ? 'GET' : 'HEAD';
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
     const req = protocol.request(parsedUrl.href, {
-      method: 'HEAD',
+      method,
       timeout,
       headers: {
-        'User-Agent': 'SiteGuard/0.1 Security Scanner',
+        'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)',
         'Origin': 'https://evil.example.com'
       },
       rejectUnauthorized: false,
     }, (res) => {
+      if (method === 'GET') { res.resume(); }
+      // HEAD returned error — retry with GET
+      if (!options._useGet && res.statusCode >= 400) {
+        fetchWithOrigin(parsedUrl, { ...options, _useGet: true }).then(resolve).catch(reject);
+        return;
+      }
       resolve(res.headers);
     });
     req.on('error', reject);
@@ -130,7 +141,7 @@ function checkMethods(parsedUrl, options = {}) {
     const req = protocol.request(parsedUrl.href, {
       method: 'OPTIONS',
       timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
       const allow = res.headers.allow || '';

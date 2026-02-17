@@ -184,16 +184,20 @@ async function scanHeaders(parsedUrl, options = {}) {
 function fetchHeaders(parsedUrl, options = {}) {
   return new Promise((resolve, reject) => {
     const timeout = options.timeout || 10000;
+    const method = options._useGet ? 'GET' : 'HEAD';
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
     
     const req = protocol.request(parsedUrl.href, {
-      method: 'HEAD',
+      method,
       timeout,
       headers: {
-        'User-Agent': 'mpx-scan/1.2.0 Security Scanner (https://github.com/mesaplexdev/mpx-scan)'
+        'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)'
       },
       rejectUnauthorized: false // We check SSL separately
     }, (res) => {
+      // Consume body for GET requests
+      if (method === 'GET') { res.resume(); }
+
       // Follow redirects (up to 5)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const redirectUrl = new URL(res.headers.location, parsedUrl.href);
@@ -205,6 +209,14 @@ function fetchHeaders(parsedUrl, options = {}) {
           .then(resolve).catch(reject);
         return;
       }
+
+      // If HEAD returned 4xx/5xx, retry with GET (some servers reject HEAD)
+      if (!options._useGet && res.statusCode >= 400) {
+        fetchHeaders(parsedUrl, { ...options, _useGet: true })
+          .then(resolve).catch(reject);
+        return;
+      }
+
       resolve(res.headers);
     });
 

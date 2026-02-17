@@ -125,7 +125,7 @@ function fetchBody(parsedUrl, options = {}) {
       method: 'GET',
       timeout,
       headers: { 
-        'User-Agent': 'SiteGuard/0.1 Security Scanner',
+        'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)',
         'Accept': 'text/html'
       },
       rejectUnauthorized: false,

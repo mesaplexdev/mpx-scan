@@ -297,21 +297,28 @@ async function scanFingerprint(parsedUrl, options = {}) {
 function fetchHeaders(parsedUrl, options = {}) {
   return new Promise((resolve) => {
     const timeout = options.timeout || 10000;
+    const method = options._useGet ? 'GET' : 'HEAD';
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
     let resolved = false;
     const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
     const timer = setTimeout(() => done(null), timeout + 2000);
 
     const req = protocol.request(parsedUrl.href, {
-      method: 'HEAD', timeout,
-      headers: { 'User-Agent': 'SiteGuard/0.1 Security Scanner' },
+      method, timeout,
+      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
+      if (method === 'GET') { res.resume(); }
       clearTimeout(timer);
       // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const redirectUrl = new URL(res.headers.location, parsedUrl.href);
         fetchHeaders(redirectUrl, options).then(done);
+        return;
+      }
+      // HEAD returned error — retry with GET
+      if (!options._useGet && res.statusCode >= 400) {
+        fetchHeaders(parsedUrl, { ...options, _useGet: true }).then(done);
         return;
       }
       done(res.headers);
