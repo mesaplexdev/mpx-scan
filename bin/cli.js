@@ -89,6 +89,17 @@ async function runSingleScan(url, options) {
   }
 
   try {
+    // Validate timeout
+    const timeoutVal = parseInt(options.timeout);
+    if (isNaN(timeoutVal) || timeoutVal < 0) {
+      if (jsonMode) {
+        console.log(JSON.stringify({ error: 'Invalid --timeout value. Must be a non-negative number.', code: 'ERR_BAD_ARGS' }, null, 2));
+      } else {
+        console.error(chalk.red.bold('\n❌ Invalid --timeout value. Must be a non-negative number.'));
+      }
+      return EXIT.BAD_ARGS;
+    }
+    
     // Check license and rate limits
     const license = getLicense();
     const rateLimit = checkRateLimit();
@@ -159,9 +170,29 @@ async function runSingleScan(url, options) {
       console.log(formatReport(results, { ...options, quiet: quietMode }));
     }
     
+    // Check if core scanners errored with network issues (DNS failure, connection refused, etc.)
+    const coreScanners = ['headers', 'ssl'];
+    const coreErrored = coreScanners.every(name => {
+      const section = results.sections[name];
+      if (!section) return false;
+      return section.checks.some(c => c.status === 'error' && 
+        /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|network/i.test(c.message || ''));
+    });
+    if (coreErrored) {
+      return EXIT.NETWORK_ERROR;
+    }
+    
     // Determine exit code based on findings
     if (options.ci) {
       const minScore = parseInt(options.minScore);
+      if (isNaN(minScore)) {
+        if (jsonMode) {
+          console.log(JSON.stringify({ error: 'Invalid --min-score value', code: 'ERR_BAD_ARGS' }, null, 2));
+        } else {
+          console.error(chalk.red.bold('\n❌ Invalid --min-score value. Must be a number.'));
+        }
+        return EXIT.BAD_ARGS;
+      }
       const percentage = Math.round((results.score / results.maxScore) * 100);
       if (percentage < minScore) {
         if (!jsonMode && !options.brief && !quietMode) {
@@ -169,6 +200,7 @@ async function runSingleScan(url, options) {
         }
         return EXIT.ISSUES_FOUND;
       }
+      return EXIT.SUCCESS;
     }
     
     // Exit 1 if there are failures, 0 if clean
