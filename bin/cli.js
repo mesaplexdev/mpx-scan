@@ -25,19 +25,25 @@ const {
 
 const pkg = require('../package.json');
 
-// Exit codes per AI-native spec
+// Exit codes
 const EXIT = {
   SUCCESS: 0,           // Success, no issues found
-  ISSUES_FOUND: 1,      // Success, issues found
-  BAD_ARGS: 2,          // Invalid arguments
-  CONFIG_ERROR: 3,      // Configuration error
-  NETWORK_ERROR: 4      // Network/connectivity error
+  ISSUES_FOUND: 1,      // Issues found or error occurred
+  BAD_ARGS: 1,          // Invalid arguments
+  CONFIG_ERROR: 1,      // Configuration error
+  NETWORK_ERROR: 1      // Network/connectivity error
 };
 
 // Auto-detect non-interactive mode
 const isInteractive = process.stdout.isTTY && !process.env.CI;
 
 const program = new Command();
+
+// Error handling — set before any command/option registration
+program.exitOverride();
+program.configureOutput({
+  writeErr: () => {} // Suppress Commander's own error output; we handle it in the catch below
+});
 
 program
   .name('mpx-scan')
@@ -71,7 +77,8 @@ program
 
     // Show help if no URL provided
     if (!url) {
-      program.help();
+      program.outputHelp();
+      process.exit(1);
       return;
     }
     
@@ -95,7 +102,7 @@ async function runSingleScan(url, options) {
         if (jsonMode) {
           console.log(JSON.stringify({ error: `Invalid platform: "${options.fix}". Valid platforms: ${PLATFORMS.join(', ')}`, code: 'ERR_BAD_ARGS' }, null, 2));
         } else {
-          console.error(chalk.red.bold(`\n❌ Invalid platform: "${options.fix}"`));
+          console.error(chalk.red(`Error: Invalid platform: "${options.fix}"`));
           console.error(chalk.yellow(`Valid platforms: ${PLATFORMS.join(', ')}`));
           console.error('');
         }
@@ -109,7 +116,7 @@ async function runSingleScan(url, options) {
       if (jsonMode) {
         console.log(JSON.stringify({ error: 'Invalid --timeout value. Must be a non-negative number.', code: 'ERR_BAD_ARGS' }, null, 2));
       } else {
-        console.error(chalk.red.bold('\n❌ Invalid --timeout value. Must be a non-negative number.'));
+        console.error(chalk.red('Error: Invalid --timeout value. Must be a non-negative number.'));
       }
       return EXIT.BAD_ARGS;
     }
@@ -129,7 +136,7 @@ async function runSingleScan(url, options) {
           upgrade: 'https://mesaplex.com/mpx-scan'
         }, null, 2));
       } else {
-        console.error(chalk.red.bold('\n❌ Daily scan limit reached'));
+        console.error(chalk.red('Error: Daily scan limit reached'));
         console.error(chalk.yellow(`Free tier: ${FREE_DAILY_LIMIT} scans/day`));
         console.error(chalk.gray(`Resets: ${new Date(rateLimit.resetsAt).toLocaleString()}\n`));
         console.error(chalk.blue('Upgrade to Pro for unlimited scans:'));
@@ -147,7 +154,7 @@ async function runSingleScan(url, options) {
           upgrade: 'https://mesaplex.com/mpx-scan'
         }, null, 2));
       } else {
-        console.error(chalk.red.bold('\n❌ --full flag requires Pro license'));
+        console.error(chalk.red('Error: --full flag requires Pro license'));
         console.error(chalk.yellow('Free tier includes: headers, SSL, server checks'));
         console.error(chalk.yellow('Pro includes: all checks (DNS, cookies, SRI, exposed files, etc.)\n'));
         console.error(chalk.blue('Upgrade: https://mesaplex.com/mpx-scan\n'));
@@ -203,7 +210,7 @@ async function runSingleScan(url, options) {
         if (jsonMode) {
           console.log(JSON.stringify({ error: 'Invalid --min-score value', code: 'ERR_BAD_ARGS' }, null, 2));
         } else {
-          console.error(chalk.red.bold('\n❌ Invalid --min-score value. Must be a number.'));
+          console.error(chalk.red('Error: Invalid --min-score value. Must be a number.'));
         }
         return EXIT.BAD_ARGS;
       }
@@ -228,7 +235,7 @@ async function runSingleScan(url, options) {
       const code = isNetworkError(err) ? 'ERR_NETWORK' : 'ERR_SCAN';
       console.log(JSON.stringify({ error: err.message, code }, null, 2));
     } else {
-      console.error(chalk.red.bold('\n❌ Error:'), err.message);
+      console.error(chalk.red('Error:'), err.message);
       console.error('');
     }
     return isNetworkError(err) ? EXIT.NETWORK_ERROR : EXIT.ISSUES_FOUND;
@@ -244,7 +251,7 @@ async function runBatchMode(options) {
     if (jsonMode) {
       console.log(JSON.stringify({ error: 'No URLs provided on stdin', code: 'ERR_NO_INPUT' }, null, 2));
     } else {
-      console.error(chalk.red('No URLs provided. Pipe URLs via stdin:'));
+      console.error(chalk.red('Error: No URLs provided. Pipe URLs via stdin:'));
       console.error(chalk.gray('  cat urls.txt | mpx-scan --batch --json'));
     }
     process.exit(EXIT.BAD_ARGS);
@@ -257,7 +264,7 @@ async function runBatchMode(options) {
     if (jsonMode) {
       console.log(JSON.stringify({ error: 'No valid URLs found in input', code: 'ERR_NO_INPUT' }, null, 2));
     } else {
-      console.error(chalk.red('No valid URLs found in input.'));
+      console.error(chalk.red('Error: No valid URLs found in input.'));
     }
     process.exit(EXIT.BAD_ARGS);
     return;
@@ -391,7 +398,7 @@ program
       console.log(chalk.gray('  • Batch scanning'));
       console.log('');
     } catch (err) {
-      console.error(chalk.red.bold('\n❌ Activation failed:'), err.message);
+      console.error(chalk.red('Error:'), err.message);
       console.error('');
       process.exit(EXIT.CONFIG_ERROR);
     }
@@ -474,7 +481,7 @@ program
       if (jsonMode) {
         console.log(JSON.stringify({ error: err.message, code: 'ERR_UPDATE' }, null, 2));
       } else {
-        console.error(chalk.red.bold('\n❌ Update check failed:'), err.message);
+        console.error(chalk.red('Error:'), err.message);
         console.error('');
       }
       process.exit(EXIT.NETWORK_ERROR);
@@ -510,10 +517,7 @@ ${chalk.bold('Examples:')}
 
 ${chalk.bold('Exit Codes:')}
   0  Success, no issues found
-  1  Success, issues found
-  2  Invalid arguments
-  3  Configuration error (license, rate limit)
-  4  Network/connectivity error
+  1  Error or issues found
 
 ${chalk.bold('Free vs Pro:')}
   ${chalk.yellow('Free:')}  3 scans/day, basic checks (headers, SSL, server)
@@ -522,4 +526,15 @@ ${chalk.bold('Free vs Pro:')}
   ${chalk.blue('Upgrade: https://mesaplex.com/mpx-scan')}
 `);
 
-program.parse();
+try {
+  program.parse();
+} catch (err) {
+  if (err.code === 'commander.version') {
+    process.exit(0);
+  }
+  if (err.code !== 'commander.help' && err.code !== 'commander.helpDisplayed') {
+    const msg = err.message.startsWith('error:') ? `Error: ${err.message.slice(7)}` : `Error: ${err.message}`;
+    console.error(chalk.red(msg));
+    process.exit(1);
+  }
+}
