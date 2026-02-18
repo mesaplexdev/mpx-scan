@@ -1,16 +1,24 @@
 {
   "name": "mpx-scan",
   "version": "1.3.0",
-  "description": "Professional website security scanner CLI. Check headers, SSL, cookies, DNS, and get actionable fix suggestions. Part of the Mesaplex developer toolchain.",
+  "description": "Website security scanner CLI. Headers, SSL, cookies, and DNS auditing. AI-native with JSON output and MCP server.",
   "main": "src/index.js",
   "bin": {
     "mpx-scan": "bin/cli.js"
   },
   "scripts": {
-    "test": "node test/run.js",
-    "start": "node bin/cli.js"
+    "test": "node test/run.js"
   },
+  "funding": "https://mesaplex.com/pricing",
   "keywords": [
+    "cli",
+    "devtools",
+    "mesaplex",
+    "ai-native",
+    "mcp",
+    "model-context-protocol",
+    "automation",
+    "json-output",
     "security",
     "scanner",
     "headers",
@@ -20,16 +28,10 @@
     "owasp",
     "devops",
     "ci-cd",
-    "mesaplex",
-    "devtools",
     "security-headers",
     "ssl-check",
     "dns-security",
-    "cors",
-    "mcp",
-    "ai-native",
-    "model-context-protocol",
-    "automation"
+    "cors"
   ],
   "author": "Mesaplex <support@mesaplex.com>",
   "license": "SEE LICENSE IN LICENSE",
