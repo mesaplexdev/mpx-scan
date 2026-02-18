@@ -194,6 +194,40 @@ function getSchema() {
       free: SCANNER_TIERS.free,
       pro: SCANNER_TIERS.pro
     },
+    exitCodes: {
+      0: 'Success / no issues',
+      1: 'Error or security issues found'
+    },
+    globalFlags: {
+      '--json': {
+        type: 'boolean',
+        default: false,
+        description: 'Output results as structured JSON'
+      },
+      '--quiet': {
+        type: 'boolean',
+        default: false,
+        description: 'Suppress non-essential output (no banners or progress)'
+      },
+      '--no-color': {
+        type: 'boolean',
+        default: false,
+        description: 'Disable ANSI color codes in output'
+      },
+      '--schema': {
+        type: 'boolean',
+        default: false,
+        description: 'Output this schema as JSON'
+      },
+      '--version': {
+        type: 'boolean',
+        description: 'Show version number'
+      },
+      '--help': {
+        type: 'boolean',
+        description: 'Show help information'
+      }
+    },
     mcpConfig: {
       description: 'Add to your MCP client configuration to use mpx-scan as an AI tool',
       config: {
