@@ -29,7 +29,7 @@ const pkg = require('../package.json');
 const EXIT = {
   SUCCESS: 0,           // Success, no issues found
   ISSUES_FOUND: 1,      // Issues found or error occurred
-  BAD_ARGS: 1,          // Invalid arguments
+  BAD_ARGS: 2,          // Invalid arguments / bad usage
   CONFIG_ERROR: 1,      // Configuration error
   NETWORK_ERROR: 1      // Network/connectivity error
 };
@@ -78,7 +78,7 @@ program
     // Show help if no URL provided
     if (!url) {
       program.outputHelp();
-      process.exit(1);
+      process.exit(EXIT.BAD_ARGS);
       return;
     }
     
@@ -518,6 +518,7 @@ ${chalk.bold('Examples:')}
 ${chalk.bold('Exit Codes:')}
   0  Success, no issues found
   1  Error or issues found
+  2  Invalid usage or bad arguments
 
 ${chalk.bold('Free vs Pro:')}
   ${chalk.yellow('Free:')}  3 scans/day, basic checks (headers, SSL, server)
@@ -535,6 +536,6 @@ try {
   if (err.code !== 'commander.help' && err.code !== 'commander.helpDisplayed') {
     const msg = err.message.startsWith('error:') ? `Error: ${err.message.slice(7)}` : `Error: ${err.message}`;
     console.error(chalk.red(msg));
-    process.exit(1);
+    process.exit(EXIT.BAD_ARGS);
   }
 }
