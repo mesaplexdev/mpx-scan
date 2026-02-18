@@ -38,7 +38,9 @@
     "url": "git+https://github.com/mesaplexdev/mpx-scan.git"
   },
   "homepage": "https://github.com/mesaplexdev/mpx-scan#readme",
-  "bugs": "https://github.com/mesaplexdev/mpx-scan/issues",
+  "bugs": {
+    "url": "https://github.com/mesaplexdev/mpx-scan/issues"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -51,7 +53,6 @@
     "src/",
     "bin/",
     "README.md",
-    "LICENSE",
-    "package.json"
+    "LICENSE"
   ]
 }
