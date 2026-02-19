@@ -88,7 +88,7 @@ function checkRedirectToHttps(httpUrl, options = {}) {
     const req = http.request(httpUrl.href, {
       method,
       timeout,
-      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
+      headers: { 'User-Agent': 'mpx-scan/1.3.0 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
     }, (res) => {
       if (method === 'GET') { res.resume(); }
       if (res.statusCode >= 300 && res.statusCode < 400) {
@@ -115,7 +115,7 @@ function fetchWithOrigin(parsedUrl, options = {}) {
       method,
       timeout,
       headers: {
-        'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)',
+        'User-Agent': 'mpx-scan/1.3.0 Security Scanner (https://github.com/mesaplexdev/mpx-scan)',
         'Origin': 'https://evil.example.com'
       },
       rejectUnauthorized: false,
@@ -141,7 +141,7 @@ function checkMethods(parsedUrl, options = {}) {
     const req = protocol.request(parsedUrl.href, {
       method: 'OPTIONS',
       timeout,
-      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
+      headers: { 'User-Agent': 'mpx-scan/1.3.0 Security Scanner (https://github.com/mesaplexdev/mpx-scan)' },
       rejectUnauthorized: false,
     }, (res) => {
       const allow = res.headers.allow || '';

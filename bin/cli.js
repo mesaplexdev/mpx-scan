@@ -12,6 +12,7 @@ const chalk = require('chalk');
 const { scan } = require('../src/index');
 const { formatReport, formatBrief } = require('../src/reporters/terminal');
 const { formatJSON } = require('../src/reporters/json');
+const { generatePDF, getDefaultPDFFilename } = require('../src/reporters/pdf');
 const { generateFixes, PLATFORMS } = require('../src/generators/fixes');
 const { getSchema } = require('../src/schema');
 const { 
@@ -58,6 +59,7 @@ program
   .option('--batch', 'Batch mode: read URLs from stdin (one per line)')
   .option('--schema', 'Output JSON schema describing all commands and flags')
   .option('--fix <platform>', `Generate fix config for platform (${PLATFORMS.join(', ')})`)
+  .option('--pdf [filename]', 'Export results as a PDF report')
   .option('--timeout <seconds>', 'Connection timeout', '10')
   .option('--ci', 'CI/CD mode: exit 1 if score below threshold')
   .option('--min-score <score>', 'Minimum score for CI mode', '70')
@@ -191,6 +193,25 @@ async function runSingleScan(url, options) {
       console.log(formatReport(results, { ...options, quiet: quietMode }));
     }
     
+    // Generate PDF if requested
+    if (options.pdf !== undefined) {
+      const pdfPath = (typeof options.pdf === 'string' && options.pdf)
+        ? options.pdf
+        : getDefaultPDFFilename(results.hostname);
+      try {
+        await generatePDF(results, pdfPath);
+        if (!jsonMode && !options.brief) {
+          console.error(chalk.green(`📄 PDF report saved: ${pdfPath}`));
+        }
+      } catch (pdfErr) {
+        if (jsonMode) {
+          console.error(JSON.stringify({ warning: `PDF generation failed: ${pdfErr.message}` }));
+        } else {
+          console.error(chalk.yellow(`Warning: PDF generation failed: ${pdfErr.message}`));
+        }
+      }
+    }
+
     // Check if core scanners errored with network issues (DNS failure, connection refused, etc.)
     const coreScanners = ['headers', 'ssl'];
     const coreErrored = coreScanners.every(name => {
@@ -510,6 +531,8 @@ ${chalk.bold('Examples:')}
   ${chalk.cyan('mpx-scan example.com --json')}            JSON output
   ${chalk.cyan('mpx-scan example.com --fix nginx')}       Generate nginx config
   ${chalk.cyan('mpx-scan example.com --brief')}           One-line summary
+  ${chalk.cyan('mpx-scan example.com --pdf')}             Export PDF report
+  ${chalk.cyan('mpx-scan example.com --pdf report.pdf')}  Export PDF to specific file
   ${chalk.cyan('mpx-scan --schema')}                      Show tool schema (JSON)
   ${chalk.cyan('cat urls.txt | mpx-scan --batch --json')} Batch scan from stdin
   ${chalk.cyan('mpx-scan mcp')}                           Start MCP server

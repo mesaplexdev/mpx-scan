@@ -191,7 +191,7 @@ function fetchHeaders(parsedUrl, options = {}) {
       method,
       timeout,
       headers: {
-        'User-Agent': 'mpx-scan/1.2.1 Security Scanner (https://github.com/mesaplexdev/mpx-scan)'
+        'User-Agent': 'mpx-scan/1.3.0 Security Scanner (https://github.com/mesaplexdev/mpx-scan)'
       },
       rejectUnauthorized: false // We check SSL separately
     }, (res) => {

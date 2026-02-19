@@ -52,7 +52,7 @@ function checkConnectivity(parsedUrl, timeoutMs) {
       path: parsedUrl.pathname || '/',
       method: 'HEAD',
       timeout: timeoutMs,
-      headers: { 'User-Agent': 'mpx-scan/1.2.1 Security Scanner' },
+      headers: { 'User-Agent': 'mpx-scan/1.3.0 Security Scanner' },
       rejectUnauthorized: false,
     }, (res) => {
       clearTimeout(timer);

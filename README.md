@@ -83,6 +83,7 @@ Returns structured JSON to stdout (progress/status goes to stderr):
 ```json
 {
   "mpxScan": {
+    "version": "1.3.0",
     "scannedAt": "2026-02-16T22:00:00.000Z",
     "scanDuration": 350
   },
@@ -122,6 +123,21 @@ mpx-scan https://example.com --fix cloudflare
 mpx-scan https://example.com --brief
 ```
 
+### PDF Export
+
+```bash
+# Generate PDF report (auto-named)
+mpx-scan https://example.com --pdf
+
+# Specify output filename
+mpx-scan https://example.com --pdf report.pdf
+
+# Combine with JSON output
+mpx-scan https://example.com --json --pdf report.pdf
+```
+
+Generates a professional PDF report with color-coded findings, severity grades, and actionable recommendations.
+
 ### Batch Scanning
 
 ```bash
@@ -155,6 +171,7 @@ Options:
   --no-color               Disable ANSI color codes
   --batch                  Read URLs from stdin (one per line)
   --schema                 Output JSON schema for tool discovery
+  --pdf [filename]         Export results as a PDF report
   --fix <platform>         Generate fix config (nginx, apache, caddy, cloudflare)
   --timeout <seconds>      Connection timeout (default: 10)
   --ci                     CI mode: exit 1 if below --min-score
@@ -196,8 +213,9 @@ The MCP server exposes these tools:
 
 | Code | Meaning |
 |------|---------|
-| 0 | Success |
+| 0 | Success, no issues found |
 | 1 | Issues found or error |
+| 2 | Invalid usage or bad arguments |
 
 ### Error Responses (JSON mode)
 
