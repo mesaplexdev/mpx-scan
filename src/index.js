@@ -62,7 +62,7 @@ function checkConnectivity(parsedUrl, timeoutMs) {
 
     req.on('error', (err) => {
       clearTimeout(timer);
-      if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+      if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
         reject(err);
       } else {
         resolve(); // Other errors (like SSL) are fine — host is reachable

@@ -117,8 +117,14 @@ async function scanDNS(parsedUrl, options = {}) {
   try {
     const mxRecords = await withTimeout(resolver.resolveMx(rootDomain), dnsTimeout, `MX ${rootDomain}`);
     if (mxRecords && mxRecords.length > 0) {
-      const mxList = mxRecords.sort((a, b) => a.priority - b.priority).map(r => `${r.exchange} (${r.priority})`);
-      checks.push({ name: 'MX Records', status: 'info', message: `Mail servers: ${mxList.join(', ')}`, value: mxList.join(', ') });
+      const mxList = mxRecords.sort((a, b) => a.priority - b.priority).map(r => `${r.exchange || '.'} (${r.priority})`);
+      // Null MX (RFC 7505): single record with exchange "." and priority 0 means domain does not accept mail
+      const isNullMx = mxRecords.length === 1 && (!mxRecords[0].exchange || mxRecords[0].exchange === '.') && mxRecords[0].priority === 0;
+      if (isNullMx) {
+        checks.push({ name: 'MX Records', status: 'info', message: 'Null MX — domain does not accept email', value: '. (0)' });
+      } else {
+        checks.push({ name: 'MX Records', status: 'info', message: `Mail servers: ${mxList.join(', ')}`, value: mxList.join(', ') });
+      }
     }
   } catch { /* MX is informational only */ }
 
